@@ -1,4 +1,3 @@
-
 using Microsoft.EntityFrameworkCore;
 using Parking.Api.Data;
 using Parking.Api.Models;
@@ -10,47 +9,53 @@ namespace Parking.Api.Services
         private readonly AppDbContext _db;
         public FaturamentoService(AppDbContext db) => _db = db;
 
-        // BUG proposital: usa dono ATUAL do veículo em vez do dono NA DATA DE CORTE
         public async Task<List<Fatura>> GerarAsync(string competencia, CancellationToken ct = default)
         {
-            // competencia formato yyyy-MM
             var part = competencia.Split('-');
             var ano = int.Parse(part[0]);
             var mes = int.Parse(part[1]);
-            var ultimoDia = DateTime.DaysInMonth(ano, mes);
-            var corte = new DateTime(ano, mes, ultimoDia, 23, 59, 59, DateTimeKind.Utc);
+            
+            var inicioMes = new DateTime(ano, mes, 1, 0, 0, 0, DateTimeKind.Utc);
+            var fimMes = inicioMes.AddMonths(1).AddDays(-1);
+            decimal diasNoMes = DateTime.DaysInMonth(ano, mes);
 
-            var mensalistas = await _db.Clientes
-                .Where(c => c.Mensalista)
-                .AsNoTracking()
-                .ToListAsync(ct);
-
+            var mensalistas = await _db.Clientes.Where(c => c.Mensalista).AsNoTracking().ToListAsync(ct);
             var criadas = new List<Fatura>();
 
             foreach (var cli in mensalistas)
             {
-                var existente = await _db.Faturas
-                    .FirstOrDefaultAsync(f => f.ClienteId == cli.Id && f.Competencia == competencia, ct);
-                if (existente != null) continue; // idempotência simples
+                if (await _db.Faturas.AnyAsync(f => f.ClienteId == cli.Id && f.Competencia == competencia, ct)) continue;
 
-                var veiculosAtuaisDoCliente = await _db.Veiculos
-                    .Where(v => v.ClienteId == cli.Id)
-                    .Select(v => v.Id)
-                    .ToListAsync(ct);
-
-                var fat = new Fatura
-                {
+                var veiculos = await _db.Veiculos.Where(v => v.ClienteId == cli.Id).ToListAsync(ct);
+                
+                var fat = new Fatura {
+                    Id = Guid.NewGuid(),
                     Competencia = competencia,
                     ClienteId = cli.Id,
-                    Valor = cli.ValorMensalidade ?? 0m,
-                    Observacao = "BUG: usando dono atual do veículo"
+                    Valor = 0,
+                    Observacao = "Faturamento proporcional por dias de posse."
                 };
 
-                foreach (var id in veiculosAtuaisDoCliente)
-                    fat.Veiculos.Add(new FaturaVeiculo { FaturaId = fat.Id, VeiculoId = id });
+                decimal totalFatura = 0;
+                foreach (var v in veiculos)
+                {
+                    // Lógica Proporcional
+                    DateTime inicioCobranca = v.DataInclusao > inicioMes ? v.DataInclusao : inicioMes;
+                    if (inicioCobranca > fimMes) continue;
 
-                _db.Faturas.Add(fat);
-                criadas.Add(fat);
+                    int diasAtivos = (fimMes.Date - inicioCobranca.Date).Days + 1;
+                    decimal valorDiario = (cli.ValorMensalidade ?? 0) / diasNoMes;
+                    totalFatura += valorDiario * diasAtivos;
+
+                    fat.Veiculos.Add(new FaturaVeiculo { FaturaId = fat.Id, VeiculoId = v.Id });
+                }
+
+                if (totalFatura > 0)
+                {
+                    fat.Valor = Math.Round(totalFatura, 2);
+                    _db.Faturas.Add(fat);
+                    criadas.Add(fat);
+                }
             }
 
             await _db.SaveChangesAsync(ct);

@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { apiGet, apiPost, apiDelete } from '../api'
+import { apiGet, apiPost, apiDelete, apiPut } from '../api' 
 
 export default function ClientesPage(){
   const qc = useQueryClient()
+  const [editId, setEditId] = useState(null); 
   const [filtro, setFiltro] = useState('')
   const [mensalista, setMensalista] = useState('all')
   const [form, setForm] = useState({ nome:'', telefone:'', endereco:'', mensalista:false, valorMensalidade:'' })
@@ -13,15 +14,46 @@ export default function ClientesPage(){
     queryFn:() => apiGet(`/api/clientes?pagina=1&tamanho=20&filtro=${encodeURIComponent(filtro)}&mensalista=${mensalista}`)
   })
 
+  const limparForm = () => {
+    setEditId(null);
+    setForm({ nome:'', telefone:'', endereco:'', mensalista:false, valorMensalidade:'' });
+  }
+
   const create = useMutation({
     mutationFn: (data) => apiPost('/api/clientes', data),
-    onSuccess: () => qc.invalidateQueries({ queryKey:['clientes'] })
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey:['clientes'] });
+      limparForm();
+    },
+    onError: (err) => alert(err.response?.data || "Erro ao criar")
   })
+
+  const update = useMutation({
+    mutationFn: (data) => apiPut(`/api/clientes/${editId}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey:['clientes'] });
+      limparForm();
+    },
+    onError: (err) => alert(err.response?.data || "Erro ao atualizar")
+  });
 
   const remover = useMutation({
     mutationFn: (id) => apiDelete(`/api/clientes/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey:['clientes'] })
   })
+
+  const handleSalvar = () => {
+    const payload = { 
+      ...form, 
+      valorMensalidade: form.valorMensalidade ? Number(form.valorMensalidade) : null 
+    };
+
+    if (editId) {
+      update.mutate(payload);
+    } else {
+      create.mutate(payload);
+    }
+  };
 
   return (
     <div>
@@ -35,11 +67,10 @@ export default function ClientesPage(){
             <option value="true">Mensalistas</option>
             <option value="false">Não mensalistas</option>
           </select>
-          <div/>
         </div>
       </div>
 
-      <h3>Novo cliente</h3>
+      <h3>{editId ? 'Editar Cliente' : 'Novo cliente'}</h3>
       <div className="section">
         <div className="grid grid-4">
           <input placeholder="Nome" value={form.nome} onChange={e=>setForm({...form, nome:e.target.value})}/>
@@ -49,12 +80,13 @@ export default function ClientesPage(){
             <input type="checkbox" checked={form.mensalista} onChange={e=>setForm({...form, mensalista:e.target.checked})}/> Mensalista
           </label>
           <input placeholder="Valor mensalidade" value={form.valorMensalidade} onChange={e=>setForm({...form, valorMensalidade:e.target.value})}/>
-          <div/>
-          <div/>
-          <button onClick={()=>create.mutate({
-            nome:form.nome, telefone:form.telefone, endereco:form.endereco,
-            mensalista:form.mensalista, valorMensalidade:form.valorMensalidade? Number(form.valorMensalidade): null
-          })}>Salvar</button>
+          
+          <div style={{display:'flex', gap: 8}}>
+            <button onClick={handleSalvar}>
+                {editId ? 'Atualizar' : 'Salvar'}
+            </button>
+            {editId && <button className="btn-ghost" onClick={limparForm}>Cancelar</button>}
+          </div>
         </div>
       </div>
 
@@ -62,7 +94,7 @@ export default function ClientesPage(){
       <div className="section">
         {q.isLoading? <p>Carregando...</p> : (
           <table>
-            <thead><tr><th>Nome</th><th>Telefone</th><th>Mensalista</th><th></th></tr></thead>
+            <thead><tr><th>Nome</th><th>Telefone</th><th>Mensalista</th><th>Ações</th></tr></thead>
             <tbody>
               {q.data.itens.map(c=>(
                 <tr key={c.id}>
@@ -70,7 +102,12 @@ export default function ClientesPage(){
                   <td>{c.telefone}</td>
                   <td>{c.mensalista? 'Sim':'Não'}</td>
                   <td>
-                    <button className="btn-ghost" onClick={()=>remover.mutate(c.id)}>Excluir</button>
+                    <button className="btn-ghost" onClick={() => {
+                      setEditId(c.id);
+                      setForm({ ...c, valorMensalidade: c.valorMensalidade || '' });
+                    }}>Editar</button>
+                    
+                    <button className="btn-ghost" style={{color:'red'}} onClick={()=>remover.mutate(c.id)}>Excluir</button>
                   </td>
                 </tr>
               ))}

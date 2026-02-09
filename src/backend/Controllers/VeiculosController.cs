@@ -52,7 +52,6 @@ namespace Parking.Api.Controllers
             var v = await _db.Veiculos.FindAsync(id);
             if (v == null) return NotFound();
             var placa = _placa.Sanitizar(dto.Placa);
-            if (!_placa.EhValida(placa)) return BadRequest("Placa inválida.");
             if (await _db.Veiculos.AnyAsync(x => x.Placa == placa && x.Id != id)) return Conflict("Placa já existe.");
 
             v.Placa = placa;

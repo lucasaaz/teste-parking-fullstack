@@ -63,6 +63,15 @@ namespace Parking.Api.Controllers
         {
             var c = await _db.Clientes.FindAsync(id);
             if (c == null) return NotFound();
+
+            var duplicado = await _db.Clientes.AnyAsync(x => 
+                x.Nome == dto.Nome && 
+                x.Telefone == dto.Telefone && 
+                x.Id != id); 
+
+            if (duplicado) 
+                return BadRequest("Já existe um cliente cadastrado com este nome e telefone.");
+                
             c.Nome = dto.Nome;
             c.Telefone = dto.Telefone;
             c.Endereco = dto.Endereco;

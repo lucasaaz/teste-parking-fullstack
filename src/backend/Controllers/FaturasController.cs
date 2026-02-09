@@ -27,11 +27,23 @@ namespace Parking.Api.Controllers
         public async Task<IActionResult> List([FromQuery] string? competencia = null)
         {
             var q = _db.Faturas.AsQueryable();
-            if (!string.IsNullOrWhiteSpace(competencia)) q = q.Where(f => f.Competencia == competencia);
+            
+            if (!string.IsNullOrWhiteSpace(competencia)) 
+                q = q.Where(f => f.Competencia == competencia);
+
             var list = await q
                 .OrderByDescending(f => f.CriadaEm)
                 .Select(f => new {
-                    f.Id, f.Competencia, f.ClienteId, f.Valor, f.CriadaEm,
+                    f.Id,
+                    f.Competencia,
+                    f.ClienteId,
+                    // SOLUÇÃO: Busca o nome do cliente associado à fatura
+                    ClienteNome = _db.Clientes
+                        .Where(c => c.Id == f.ClienteId)
+                        .Select(c => c.Nome)
+                        .FirstOrDefault(),
+                    f.Valor,
+                    f.CriadaEm,
                     qtdVeiculos = _db.FaturasVeiculos.Count(x => x.FaturaId == f.Id)
                 })
                 .ToListAsync();
