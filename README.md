@@ -3,14 +3,14 @@
 - **Frontend**: React (Vite) + React Router + React Query  
 - **Sem containers**: a conexão é configurada diretamente em `appsettings.json`.  
 
-> É permitido substituir React por Angular/Vue e/ou trocar o ORM, desde que o escopo seja mantido e as decisões sejam explicadas no README. O boilerplate fornecido está em React com JavaScript.  
+> Foi mantido o React e o ORM.  
 
 ### Execução Local
 
 #### Banco PostgreSQL (pgAdmin 4)
-Crie um banco local chamado parking_test utilizando o pgAdmin 4.
+Banco local chamado parking_test utilizando o pgAdmin 4.
 
-Ajuste a ConnectionString em appsettings.json com suas credenciais do PostgreSQL.
+Ajuste a ConnectionString em appsettings.json com suas credenciais do PostgreSQL. Minha senha foi "123456".
 
 Execute o script de seed (scripts/seed.sql) através da ferramenta Query Tool do pgAdmin para popular as tabelas iniciais.
 
